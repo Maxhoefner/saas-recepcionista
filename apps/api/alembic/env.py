@@ -8,22 +8,8 @@ from alembic import context
 from app.core.config import get_settings
 from app.core.db import Base
 
-# Import models here so Base.metadata is aware of them for autogenerate.
-from app.models import (  # noqa: F401
-    Appointment,
-    BlockedTime,
-    Business,
-    BusinessHours,
-    Customer,
-    Holiday,
-    Membership,
-    Professional,
-    ProfessionalHours,
-    ProfessionalService,
-    RefreshToken,
-    Service,
-    User,
-)
+# Import every model here so Base.metadata is aware of them for autogenerate.
+from app.models import *  # noqa: F401,F403
 
 config = context.config
 if config.config_file_name is not None:

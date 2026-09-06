@@ -1,10 +1,13 @@
 from fastapi import APIRouter
 
 from app.api.v1 import (
+    ai_settings,
     appointments,
     auth,
     businesses,
+    conversations,
     customers,
+    faqs,
     health,
     professionals,
     schedules,
@@ -20,3 +23,6 @@ api_router.include_router(professionals.router)
 api_router.include_router(schedules.router)
 api_router.include_router(customers.router)
 api_router.include_router(appointments.router)
+api_router.include_router(ai_settings.router)
+api_router.include_router(faqs.router)
+api_router.include_router(conversations.router)

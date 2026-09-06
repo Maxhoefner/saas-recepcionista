@@ -25,6 +25,11 @@ class Settings(BaseSettings):
 
     CORS_ORIGINS: list[str] = ["http://localhost:3000"]
 
+    LLM_PROVIDER: str = "anthropic"
+    ANTHROPIC_API_KEY: str = ""
+    ANTHROPIC_MODEL: str = "claude-sonnet-5"
+    AGENT_MAX_TOOL_ITERATIONS: int = 5
+
 
 @lru_cache
 def get_settings() -> Settings:

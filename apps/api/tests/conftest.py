@@ -1,5 +1,5 @@
 import os
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Iterator
 
 os.environ.setdefault(
     "DATABASE_URL",
@@ -11,6 +11,8 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
+from app.ai.providers import get_llm_provider
+from app.ai.providers.base import AgentTurnResult, LLMProvider
 from app.core.db import Base, get_db
 from app.main import app
 from app.models import *  # noqa: F401,F403 (import every model so metadata sees them)
@@ -94,3 +96,36 @@ async def owner(client: AsyncClient) -> dict:
         "business_id": business_id,
         "headers": {"Authorization": f"Bearer {body['access_token']}"},
     }
+
+
+class FakeProvider(LLMProvider):
+    """Scripted stand-in for a real LLM in tests — no network calls, no API
+    key, fully deterministic. Queue responses with `.queue(...)`; each
+    `.generate()` call pops the next one and records what it was asked."""
+
+    def __init__(self) -> None:
+        self.script: list[AgentTurnResult] = []
+        self.calls: list[dict] = []
+
+    def queue(self, result: AgentTurnResult) -> None:
+        self.script.append(result)
+
+    async def generate(self, *, system: str, messages: list, tools: list) -> AgentTurnResult:
+        self.calls.append({"system": system, "messages": list(messages), "tools": tools})
+        if not self.script:
+            raise AssertionError("FakeProvider script exhausted — queue more responses")
+        return self.script.pop(0)
+
+
+@pytest.fixture
+def fake_provider() -> FakeProvider:
+    return FakeProvider()
+
+
+@pytest.fixture(autouse=True)
+def _override_llm_provider(fake_provider: FakeProvider) -> Iterator[None]:
+    app.dependency_overrides[get_llm_provider] = lambda: fake_provider
+    try:
+        yield
+    finally:
+        app.dependency_overrides.pop(get_llm_provider, None)

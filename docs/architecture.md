@@ -68,22 +68,27 @@ Worker: resuelve business_id por phone_number_id → busca/crea customer y conve
       → guarda mensaje + logs de tool calls → envía por WhatsApp
 ```
 
-## AI Agent
+## AI Agent (Fase 5)
 
-- Loop de tool-calling estándar (máx. ~5 iteraciones).
-- Prompt dinámico por negocio (nombre, tono, reglas). Precios/servicios/disponibilidad **nunca** se embeben en el prompt — siempre se consultan por tool.
-- Memoria: ventana deslizante + resumen para conversaciones largas (control de costo de tokens).
-- Defensa en profundidad: cada tool re-valida en el servicio de negocio (ej. disponibilidad real en la misma transacción de `create_appointment`).
+- **Abstracción de proveedor** (`app/ai/providers/`): `LLMProvider` es la única interfaz que el resto del código conoce. `AnthropicProvider` es la implementación concreta; agregar otro proveedor es implementar la interfaz, no tocar el agente. El formato de mensajes interno (`ChatMessage`/`ChatRole`) es propio, no el de Anthropic — el provider traduce en ambas direcciones.
+- **Tools** (`app/ai/tools/`): cada una es un `ToolDefinition` (nombre, descripción, schema de argumentos vía Pydantic, handler). Los handlers llaman a los *services* de las Fases 3/4 — nunca SQL directo. El `business_id` se inyecta desde el `ToolContext` server-side; el LLM nunca lo ve ni lo puede pasar como argumento. Las tools sobre turnos (`cancel_appointment`, `reschedule_appointment`) además verifican que el turno pertenezca al `customer_id` de la conversación — aislamiento a nivel de cliente, no solo de negocio.
+- **Resolución por nombre**: el cliente dice "corte", no un UUID — `find_by_name()` hace el matching (exacto o parcial, case-insensitive) contra servicios/profesionales activos, devolviendo un error legible para el LLM si es ambiguo o no existe. Los turnos sí se referencian por id una vez que `get_customer_appointments` se lo dio al modelo.
+- **Loop de tool-calling** (`app/ai/agent.py`): máx. `AGENT_MAX_TOOL_ITERATIONS` (default 5) iteraciones. Cada tool call se audita en `ai_tool_calls` (nombre, argumentos, resultado, éxito, latencia). Un error de tool nunca tira la conversación — se loguea internamente y se le devuelve `{"error": ...}` al modelo para que lo maneje con naturalidad (regla 33).
+- **`create_handoff` es terminal**: en cuanto se ejecuta, el loop corta y la conversación pasa a `HUMAN_HANDOFF` — `handle_message` chequea ese estado antes de siquiera invocar al agente, así que los mensajes posteriores del cliente se guardan pero no generan respuesta automática hasta que alguien la devuelva a la IA.
+- **Prompt dinámico** (`app/ai/prompts/system_prompt.py`): nombre/tono del asistente desde `AISettings` (configurable por negocio, con defaults perezosos), fecha/hora actual en el timezone del negocio, y las reglas fijas (nunca inventar, confirmar antes de acciones sensibles, no revelar info interna, timezone del negocio no UTC, etc.). Precios/servicios/disponibilidad **nunca** se embeben en el prompt — siempre se consultan por tool.
+- **Memoria**: ventana deslizante de los últimos 30 mensajes; resumir conversaciones más largas queda para cuando el volumen real lo justifique, no es necesario para el MVP.
+- **Sin WhatsApp todavía**: `POST /businesses/{id}/conversations/{id}/messages` simula un mensaje entrante y devuelve la respuesta del agente — es exactamente lo que el webhook de WhatsApp (Fase 6) va a invocar internamente (`agent.handle_message`) en lugar de HTTP.
+- **Tests con proveedor scripteado** (`FakeProvider` en `conftest.py`): nada de llamadas reales a la API de Claude en la suite — cada test encola las respuestas exactas que el "modelo" debe dar y verifica qué tools se ejecutaron y con qué resultado.
 
-Tools MVP: `get_business_info`, `get_services`, `get_service_details`, `get_professionals`, `check_availability`, `create_customer`, `get_customer`, `get_customer_appointments`, `create_appointment`, `cancel_appointment`, `reschedule_appointment`, `get_business_hours`, `create_handoff`, `send_confirmation`, `get_faq`.
+Tools implementadas: `get_business_info`, `get_services`, `get_service_details`, `get_professionals`, `get_business_hours`, `check_availability`, `create_appointment`, `get_customer_appointments`, `cancel_appointment`, `reschedule_appointment`, `get_faq`, `create_handoff`. (`send_confirmation` del diseño original se descartó: la confirmación es simplemente la respuesta final del propio modelo, no una acción separada.)
 
 ## Roadmap
 
 1. ✅ **Base del proyecto** — monorepo, Next.js, FastAPI, Postgres, Docker, env config.
 2. ✅ **Auth** — users, businesses, memberships, roles.
 3. ✅ **Configuración del negocio** — servicios, profesionales, horarios, clientes.
-4. ✅ **Sistema de turnos** — crear/cancelar/reprogramar, disponibilidad, anti double-booking. ← *estamos acá*
-5. AI Agent — LLM abstraído, prompt dinámico, tool calling, memoria.
+4. ✅ **Sistema de turnos** — crear/cancelar/reprogramar, disponibilidad, anti double-booking.
+5. ✅ **AI Agent** — LLM abstraído, prompt dinámico, tool calling, memoria. ← *estamos acá*
 6. WhatsApp — webhook, envío/recepción, identificación de cliente.
 7. Automatizaciones — recordatorios, confirmaciones.
 8. Dashboard — calendario, conversaciones, clientes, estadísticas.

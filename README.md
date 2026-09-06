@@ -75,9 +75,16 @@ mypy app
 - `GET/POST/PATCH /api/v1/businesses/{id}/customers`
 - `GET/POST /api/v1/businesses/{id}/appointments`, `GET .../{id}`, `POST .../{id}/{cancel,reschedule,confirm,complete,no-show}`
 - `GET /api/v1/businesses/{id}/availability?service_id=&day=&professional_id=`
+- `GET/PUT /api/v1/businesses/{id}/ai-settings` — personalidad del asistente (nombre, tono, idioma)
+- `GET/POST/PATCH/DELETE /api/v1/businesses/{id}/faqs`
+- `GET/POST /api/v1/businesses/{id}/conversations`, `GET .../{id}/messages`, `POST .../{id}/messages` (dispara al agente), `POST .../{id}/{handoff,return-to-ai}`
 
 El login del dashboard (UI) se construye en la Fase 8; por ahora la auth es solo backend.
 
+### Para probar el agente de IA con un LLM real
+
+Necesitás tu propia API key de Anthropic (console.anthropic.com) en `ANTHROPIC_API_KEY` dentro de `.env`, y reiniciar `docker compose up -d api`. Sin key configurada, todo lo demás (catálogo, turnos, CRUD de conversaciones) funciona igual — solo `POST .../messages` fallará al intentar generar una respuesta.
+
 ## Estado del proyecto
 
-Ver el roadmap de fases en [`docs/architecture.md`](docs/architecture.md#roadmap). Actualmente: **Fase 4 (turnos y disponibilidad) completa**.
+Ver el roadmap de fases en [`docs/architecture.md`](docs/architecture.md#roadmap). Actualmente: **Fase 5 (AI Agent) completa**.
