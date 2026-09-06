@@ -9,7 +9,20 @@ from app.core.config import get_settings
 from app.core.db import Base
 
 # Import models here so Base.metadata is aware of them for autogenerate.
-from app.models import Business, Membership, RefreshToken, User  # noqa: F401
+from app.models import (  # noqa: F401
+    BlockedTime,
+    Business,
+    BusinessHours,
+    Customer,
+    Holiday,
+    Membership,
+    Professional,
+    ProfessionalHours,
+    ProfessionalService,
+    RefreshToken,
+    Service,
+    User,
+)
 
 config = context.config
 if config.config_file_name is not None:

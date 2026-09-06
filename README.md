@@ -69,9 +69,13 @@ mypy app
 - `POST /api/v1/auth/register` — crea usuario + su primer negocio + membership OWNER
 - `POST /api/v1/auth/login`, `POST /api/v1/auth/refresh`, `POST /api/v1/auth/logout`, `GET /api/v1/auth/me`
 - `GET /api/v1/businesses`, `POST /api/v1/businesses` — negocios del usuario logueado, con su rol
+- `GET/POST/PATCH/DELETE /api/v1/businesses/{id}/services`
+- `GET/POST/PATCH/DELETE /api/v1/businesses/{id}/professionals` (+ `GET/PUT .../{id}/hours`)
+- `GET/PUT /api/v1/businesses/{id}/business-hours`, `GET/POST/DELETE .../blocked-times`, `.../holidays`
+- `GET/POST/PATCH /api/v1/businesses/{id}/customers`
 
 El login del dashboard (UI) se construye en la Fase 8; por ahora la auth es solo backend.
 
 ## Estado del proyecto
 
-Ver el roadmap de fases en [`docs/architecture.md`](docs/architecture.md#roadmap). Actualmente: **Fase 2 (autenticación) completa**.
+Ver el roadmap de fases en [`docs/architecture.md`](docs/architecture.md#roadmap). Actualmente: **Fase 3 (configuración del negocio) completa**.

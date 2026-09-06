@@ -12,3 +12,7 @@ class InvalidCredentialsError(ServiceError):
 
 class InvalidRefreshTokenError(ServiceError):
     pass
+
+
+class NotFoundError(ServiceError):
+    pass

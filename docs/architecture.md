@@ -37,11 +37,18 @@ Monolito modular (no microservicios) para el MVP. Separación en módulos (`ai/`
 - `require_business_role(*roles)` (`app/api/deps.py`) es la dependency que van a usar los endpoints tenant-scoped desde la Fase 3: valida que el usuario tenga membership en el `business_id` de la URL con el rol pedido.
 - Un usuario puede pertenecer a (y crear) más de un negocio — cada membership es independiente.
 
+## Configuración del negocio (Fase 3)
+
+Todo bajo `/businesses/{business_id}/...`, protegido por `require_business_role`:
+
+- **Servicios** (`Service`): nombre, precio en `price_cents` (nunca float), duración, activo. Lectura: cualquier rol. Escritura: `OWNER/ADMIN`.
+- **Profesionales** (`Professional` + `ProfessionalService`): qué servicios realiza cada uno. Crear/editar un profesional valida que los `service_ids` pertenezcan al mismo `business_id` — evita enlazar un servicio de otro tenant.
+- **Horarios**: `BusinessHours` (semanal, múltiples franjas por día para turnos partidos), `ProfessionalHours` (override opcional por profesional), `BlockedTime` (bloqueo puntual, de todo el negocio o de un profesional — valida que el profesional sea del mismo negocio), `Holiday`.
+- **Clientes** (`Customer`): identificados por `phone` (único por negocio, no globalmente — el mismo número puede ser cliente de dos negocios distintos). Cualquier rol (incluido `STAFF`) puede gestionarlos, a diferencia del catálogo. `get_or_create_by_phone` ya está pensado para que lo use el webhook de WhatsApp en la Fase 6.
+
 ## Modelo de datos (resumen)
 
-`users`, `businesses`, `memberships(user_id, business_id, role)`, `customers`, `professionals`, `services`, `professional_services`, `business_hours`, `professional_hours`, `blocked_times`, `holidays`, `appointments` (con `EXCLUDE USING gist` para prevenir double-booking a nivel de DB), `whatsapp_accounts`, `conversations`, `messages` (con `whatsapp_message_id` único para idempotencia), `ai_settings`, `faqs`, `ai_tool_calls`, `reminders`, `audit_logs`, `plans`, `subscriptions`, `usage_counters`.
-
-Detalle completo se agrega a `docs/database.md` en Fase 3/4 cuando los modelos existan.
+`users`, `businesses`, `memberships(user_id, business_id, role)`, `customers`, `professionals`, `services`, `professional_services`, `business_hours`, `professional_hours`, `blocked_times`, `holidays`, `appointments` (con `EXCLUDE USING gist` para prevenir double-booking a nivel de DB — pendiente, Fase 4), `whatsapp_accounts`, `conversations`, `messages` (con `whatsapp_message_id` único para idempotencia), `ai_settings`, `faqs`, `ai_tool_calls`, `reminders`, `audit_logs`, `plans`, `subscriptions`, `usage_counters`.
 
 ## Flujo de un mensaje de WhatsApp
 
@@ -65,8 +72,8 @@ Tools MVP: `get_business_info`, `get_services`, `get_service_details`, `get_prof
 ## Roadmap
 
 1. ✅ **Base del proyecto** — monorepo, Next.js, FastAPI, Postgres, Docker, env config.
-2. ✅ **Auth** — users, businesses, memberships, roles. ← *estamos acá*
-3. Configuración del negocio — servicios, profesionales, horarios, clientes.
+2. ✅ **Auth** — users, businesses, memberships, roles.
+3. ✅ **Configuración del negocio** — servicios, profesionales, horarios, clientes. ← *estamos acá*
 4. Sistema de turnos — crear/cancelar/reprogramar, disponibilidad, anti double-booking.
 5. AI Agent — LLM abstraído, prompt dinámico, tool calling, memoria.
 6. WhatsApp — webhook, envío/recepción, identificación de cliente.
