@@ -232,6 +232,9 @@ async def validate_slot_available(
     is closed by the DB exclusion constraint on `appointments`, which is the
     only place that's actually safe against two concurrent booking requests.
     """
+    if start_datetime < datetime.now(UTC):
+        raise SlotUnavailableError("No se puede reservar un turno en el pasado")
+
     tz = await _business_timezone(db, business_id)
     local_start = start_datetime.astimezone(tz)
     local_end = end_datetime.astimezone(tz)

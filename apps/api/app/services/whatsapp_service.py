@@ -5,7 +5,6 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.ai.agent import handle_message
 from app.ai.providers.base import LLMProvider
 from app.core.security import decrypt_secret, encrypt_secret
 from app.models.message import Message
@@ -135,6 +134,12 @@ async def _process_inbound_message(
     llm_provider: LLMProvider,
     whatsapp_provider: WhatsAppProvider,
 ) -> None:
+    # Imported here, not at module load: app.ai.agent -> app.ai.tools ->
+    # app.services.appointment_service -> app.services.reminder_service ->
+    # this module, so a top-level import here would be circular. By call
+    # time every module involved has already finished loading.
+    from app.ai.agent import handle_message
+
     already_seen = await db.scalar(
         select(Message.id).where(Message.whatsapp_message_id == message.id)
     )

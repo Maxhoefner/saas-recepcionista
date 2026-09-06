@@ -17,6 +17,7 @@ class Settings(BaseSettings):
     DEBUG: bool = True
 
     DATABASE_URL: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/ai_receptionist"
+    REDIS_URL: str = "redis://localhost:6379/0"
 
     JWT_SECRET: str = "change-me-in-.env"
     JWT_ALGORITHM: str = "HS256"

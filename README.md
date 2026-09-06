@@ -9,7 +9,7 @@ Ver [`docs/architecture.md`](docs/architecture.md) para la arquitectura completa
 - **Frontend**: Next.js + TypeScript + Tailwind (`apps/web`)
 - **Backend**: FastAPI + SQLAlchemy (async) + Alembic (`apps/api`)
 - **DB**: PostgreSQL
-- **Cola de jobs**: Redis (Fase 6+)
+- **Cola de jobs**: Arq sobre Redis (recordatorios programados, contenedor `worker` aparte)
 - **IA**: proveedor abstraído (Claude por defecto), tool-calling contra servicios de negocio
 - **WhatsApp**: WhatsApp Business Cloud API, abstraída detrás de una interfaz propia
 
@@ -80,6 +80,8 @@ mypy app
 - `GET/POST /api/v1/businesses/{id}/conversations`, `GET .../{id}/messages`, `POST .../{id}/messages` (dispara al agente), `POST .../{id}/{handoff,return-to-ai}`
 - `GET/PUT /api/v1/businesses/{id}/whatsapp-account` — conectar el número de WhatsApp del negocio
 - `GET/POST /api/v1/webhooks/whatsapp` — webhook público (verificación de Meta / recepción de mensajes), no requiere login
+- `GET/PUT /api/v1/businesses/{id}/reminder-settings` — activado, horas antes del turno, texto del mensaje
+- `GET /api/v1/businesses/{id}/reminders` — estado de los recordatorios (PENDING/SENT/FAILED/CANCELLED)
 
 El login del dashboard (UI) se construye en la Fase 8; por ahora la auth es solo backend.
 
@@ -91,6 +93,10 @@ Necesitás tu propia API key de Anthropic (console.anthropic.com) en `ANTHROPIC_
 
 Necesitás una WhatsApp Business App en [developers.facebook.com](https://developers.facebook.com), su App Secret (`WHATSAPP_APP_SECRET` en `.env`), un `WHATSAPP_VERIFY_TOKEN` (lo elegís vos) para registrar el webhook, y exponer tu `localhost:8000` con algo como `ngrok` para que Meta pueda llamarlo durante desarrollo. Una vez con la App, conectás el número de prueba gratuito de Meta vía `PUT /businesses/{id}/whatsapp-account`. Sin esto, el resto de la Fase 6 (webhook, idempotencia, resolución de negocio/cliente) ya está construido y testeado — solo falta un número real conectado para probarlo con mensajes de verdad.
 
+### Recordatorios (Fase 7)
+
+Corren solos: al crear/reprogramar un turno se programa un recordatorio (24hs antes por defecto, configurable en `/reminder-settings`), y el contenedor `worker` (Arq) lo manda por WhatsApp cuando llega la hora — revisa cada un minuto. **Importante**: fuera de la ventana de 24hs de conversación con el cliente, Meta exige que los mensajes se manden con un *template* pre-aprobado, no texto libre — el envío como texto simple que tenemos ahora sirve para desarrollo, pero antes de producción real hay que migrar a templates aprobados una vez conectada una cuenta de WhatsApp real.
+
 ## Estado del proyecto
 
-Ver el roadmap de fases en [`docs/architecture.md`](docs/architecture.md#roadmap). Actualmente: **Fase 6 (WhatsApp) completa**.
+Ver el roadmap de fases en [`docs/architecture.md`](docs/architecture.md#roadmap). Actualmente: **Fase 7 (automatizaciones) completa**.

@@ -10,7 +10,7 @@ from app.models.customer import Customer
 from app.models.professional import Professional, ProfessionalService
 from app.models.service import Service
 from app.schemas.appointment import AppointmentCreate
-from app.services import availability_service
+from app.services import availability_service, reminder_service
 from app.services.exceptions import NotFoundError, ServiceError
 
 
@@ -103,6 +103,7 @@ async def create_appointment(
         await db.rollback()
         raise DoubleBookingError("Ese profesional ya tiene un turno en ese horario") from exc
     await db.refresh(appointment)
+    await reminder_service.sync_reminder_for_appointment(db, appointment=appointment)
     return appointment
 
 
@@ -155,6 +156,7 @@ async def cancel_appointment(
     appointment.status = AppointmentStatus.CANCELLED
     await db.commit()
     await db.refresh(appointment)
+    await reminder_service.sync_reminder_for_appointment(db, appointment=appointment)
     return appointment
 
 
@@ -186,6 +188,7 @@ async def reschedule_appointment(
         await db.rollback()
         raise DoubleBookingError("Ese profesional ya tiene un turno en ese horario") from exc
     await db.refresh(appointment)
+    await reminder_service.sync_reminder_for_appointment(db, appointment=appointment)
     return appointment
 
 
@@ -205,6 +208,7 @@ async def _transition(
     appointment.status = new_status
     await db.commit()
     await db.refresh(appointment)
+    await reminder_service.sync_reminder_for_appointment(db, appointment=appointment)
     return appointment
 
 

@@ -95,6 +95,17 @@ Meta → POST /webhooks/whatsapp → valida firma (X-Hub-Signature-256, HMAC-SHA
 
 Tools implementadas: `get_business_info`, `get_services`, `get_service_details`, `get_professionals`, `get_business_hours`, `check_availability`, `create_appointment`, `get_customer_appointments`, `cancel_appointment`, `reschedule_appointment`, `get_faq`, `create_handoff`. (`send_confirmation` del diseño original se descartó: la confirmación es simplemente la respuesta final del propio modelo, no una acción separada.)
 
+## Automatizaciones (Fase 7)
+
+Acá entra la infraestructura de jobs que se había postergado en la Fase 6: **Arq** sobre Redis, corriendo en un contenedor `worker` nuevo (`docker-compose.yml`), separado del contenedor `api`.
+
+- **`ReminderSettings`** por negocio (1:1, mismo patrón que `AISettings`): activado/desactivado, `hours_before` (default 24), `message_template` con placeholders `{customer_name}`, `{service}`, `{date}`, `{time}`. Si el template tiene un placeholder inválido, cae al template default en vez de romper el envío (`_render_message`).
+- **`Reminder`**: un registro por turno, sincronizado automáticamente por `reminder_service.sync_reminder_for_appointment` — se llama desde `appointment_service` en cada create/reschedule/cancel/confirm/complete/no-show. Un recordatorio **nunca se calcula de forma independiente**: siempre refleja el horario y estado actuales del turno al que pertenece.
+- **Job de Arq** (`app/jobs/reminders.py`, `app/jobs/worker.py`): corre cada minuto (`cron(..., second=0)`), busca recordatorios `PENDING` con `scheduled_for <= now`, y los envía por `WhatsAppProvider`. Si el turno ya pasó (ej. el worker estuvo caído) o ya no está activo, el recordatorio se cancela en vez de mandarse — no tiene sentido "recordar" algo que ya ocurrió.
+- **Limitación real de Meta, no un detalle técnico nuestro**: los mensajes que un negocio inicia fuera de la ventana de 24hs de conversación con el cliente tienen que usar **templates pre-aprobados** por Meta, no texto libre. Por ahora el recordatorio se manda como texto simple — funciona perfecto para probar toda la lógica (y así lo verificamos, con `FakeWhatsAppProvider` en tests y con Meta real devolviendo 401 en Docker por credenciales de prueba), pero mandarlo de verdad en producción va a requerir migrar a `send_template_message` una vez que haya una cuenta de WhatsApp real con templates aprobados. Documentado para no encontrarnos con la sorpresa después.
+- **Encontré y corregí un bug real en el camino, no relacionado con recordatorios pero que los recordatorios expusieron**: nada impedía crear un turno con fecha en el pasado. Agregado el chequeo en `availability_service.validate_slot_available` (afecta tanto `create_appointment` como `reschedule_appointment`).
+- 56 tests. El envío se prueba llamando directo a `reminder_service.send_reminder` (forzando `scheduled_for` al pasado) — no se testea el scheduler de Arq en sí, solo la lógica que corre adentro del job.
+
 ## Roadmap
 
 1. ✅ **Base del proyecto** — monorepo, Next.js, FastAPI, Postgres, Docker, env config.
@@ -102,8 +113,8 @@ Tools implementadas: `get_business_info`, `get_services`, `get_service_details`,
 3. ✅ **Configuración del negocio** — servicios, profesionales, horarios, clientes.
 4. ✅ **Sistema de turnos** — crear/cancelar/reprogramar, disponibilidad, anti double-booking.
 5. ✅ **AI Agent** — LLM abstraído, prompt dinámico, tool calling, memoria.
-6. ✅ **WhatsApp** — webhook, envío/recepción, identificación de cliente. ← *estamos acá*
-7. Automatizaciones — recordatorios, confirmaciones (acá se introduce Arq/Redis para jobs).
+6. ✅ **WhatsApp** — webhook, envío/recepción, identificación de cliente.
+7. ✅ **Automatizaciones** — recordatorios (Arq/Redis para jobs). ← *estamos acá*
 8. Dashboard — calendario, conversaciones, clientes, estadísticas.
 9. Seguridad + testing end-to-end.
 10. Deployment a producción.

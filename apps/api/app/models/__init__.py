@@ -9,6 +9,8 @@ from app.models.membership import Membership, Role
 from app.models.message import Message, MessageRole
 from app.models.professional import Professional, ProfessionalService
 from app.models.refresh_token import RefreshToken
+from app.models.reminder import Reminder, ReminderStatus
+from app.models.reminder_settings import ReminderSettings
 from app.models.schedule import BlockedTime, BusinessHours, Holiday, ProfessionalHours
 from app.models.service import Service
 from app.models.user import User
@@ -34,6 +36,9 @@ __all__ = [
     "ProfessionalHours",
     "ProfessionalService",
     "RefreshToken",
+    "Reminder",
+    "ReminderSettings",
+    "ReminderStatus",
     "Role",
     "Service",
     "User",
