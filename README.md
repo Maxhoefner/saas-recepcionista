@@ -73,9 +73,11 @@ mypy app
 - `GET/POST/PATCH/DELETE /api/v1/businesses/{id}/professionals` (+ `GET/PUT .../{id}/hours`)
 - `GET/PUT /api/v1/businesses/{id}/business-hours`, `GET/POST/DELETE .../blocked-times`, `.../holidays`
 - `GET/POST/PATCH /api/v1/businesses/{id}/customers`
+- `GET/POST /api/v1/businesses/{id}/appointments`, `GET .../{id}`, `POST .../{id}/{cancel,reschedule,confirm,complete,no-show}`
+- `GET /api/v1/businesses/{id}/availability?service_id=&day=&professional_id=`
 
 El login del dashboard (UI) se construye en la Fase 8; por ahora la auth es solo backend.
 
 ## Estado del proyecto
 
-Ver el roadmap de fases en [`docs/architecture.md`](docs/architecture.md#roadmap). Actualmente: **Fase 3 (configuración del negocio) completa**.
+Ver el roadmap de fases en [`docs/architecture.md`](docs/architecture.md#roadmap). Actualmente: **Fase 4 (turnos y disponibilidad) completa**.

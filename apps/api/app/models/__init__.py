@@ -1,3 +1,4 @@
+from app.models.appointment import Appointment, AppointmentStatus
 from app.models.business import Business
 from app.models.customer import Customer
 from app.models.membership import Membership, Role
@@ -8,6 +9,8 @@ from app.models.service import Service
 from app.models.user import User
 
 __all__ = [
+    "Appointment",
+    "AppointmentStatus",
     "Business",
     "BlockedTime",
     "BusinessHours",

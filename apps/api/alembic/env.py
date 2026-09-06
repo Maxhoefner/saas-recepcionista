@@ -10,6 +10,7 @@ from app.core.db import Base
 
 # Import models here so Base.metadata is aware of them for autogenerate.
 from app.models import (  # noqa: F401
+    Appointment,
     BlockedTime,
     Business,
     BusinessHours,

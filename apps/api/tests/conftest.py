@@ -8,6 +8,7 @@ os.environ.setdefault(
 
 import pytest
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.core.db import Base, get_db
@@ -34,6 +35,10 @@ async def db_session_factory() -> AsyncGenerator[async_sessionmaker, None]:
     session_factory = async_sessionmaker(bind=engine, expire_on_commit=False)
 
     async with engine.begin() as conn:
+        # Needed for the appointments table's anti-double-booking EXCLUDE
+        # constraint (GiST + plain `=` on a uuid column). Alembic does this
+        # in the real migration; create_all doesn't run migrations.
+        await conn.execute(text("CREATE EXTENSION IF NOT EXISTS btree_gist"))
         await conn.run_sync(Base.metadata.drop_all)
         await conn.run_sync(Base.metadata.create_all)
 

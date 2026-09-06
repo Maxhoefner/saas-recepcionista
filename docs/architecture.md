@@ -46,6 +46,14 @@ Todo bajo `/businesses/{business_id}/...`, protegido por `require_business_role`
 - **Horarios**: `BusinessHours` (semanal, múltiples franjas por día para turnos partidos), `ProfessionalHours` (override opcional por profesional), `BlockedTime` (bloqueo puntual, de todo el negocio o de un profesional — valida que el profesional sea del mismo negocio), `Holiday`.
 - **Clientes** (`Customer`): identificados por `phone` (único por negocio, no globalmente — el mismo número puede ser cliente de dos negocios distintos). Cualquier rol (incluido `STAFF`) puede gestionarlos, a diferencia del catálogo. `get_or_create_by_phone` ya está pensado para que lo use el webhook de WhatsApp en la Fase 6.
 
+## Turnos y disponibilidad (Fase 4)
+
+- **Anti double-booking real, no solo aplicativo**: `appointments` tiene un `EXCLUDE USING gist (professional_id WITH =, tstzrange(start_datetime, end_datetime) WITH &&) WHERE status <> 'CANCELLED'`. Dos requests concurrentes para el mismo profesional y horario chocan en Postgres, no en una condición de carrera del código Python. Requiere la extensión `btree_gist` (habilitada en la migración).
+- **`availability_service.py`** calcula disponibilidad real: toma `ProfessionalHours` del día (o `BusinessHours` si el profesional no tiene override), le resta feriados, `BlockedTime` (del negocio o del profesional) y turnos ya ocupados, y devuelve slots del tamaño de `duration_minutes` del servicio. Todo convertido correctamente entre el timezone del negocio y UTC (nunca se asume UTC para horarios de atención).
+- **`validate_slot_available`** se corre en `create_appointment`/`reschedule_appointment` para rechazar turnos fuera de horario o sobre un bloqueo/feriado — deliberadamente NO chequea solapamiento con otros turnos ahí (eso lo cierra el constraint de la DB, el único lugar seguro contra una carrera real).
+- Estados: `PENDING → CONFIRMED → COMPLETED`, con `CANCELLED`/`NO_SHOW` como salidas — transiciones inválidas (cancelar un turno ya completado, etc.) rechazadas explícitamente.
+- Permisos igual que `customers`: cualquier rol de la membership puede gestionar turnos (trabajo operativo diario).
+
 ## Modelo de datos (resumen)
 
 `users`, `businesses`, `memberships(user_id, business_id, role)`, `customers`, `professionals`, `services`, `professional_services`, `business_hours`, `professional_hours`, `blocked_times`, `holidays`, `appointments` (con `EXCLUDE USING gist` para prevenir double-booking a nivel de DB — pendiente, Fase 4), `whatsapp_accounts`, `conversations`, `messages` (con `whatsapp_message_id` único para idempotencia), `ai_settings`, `faqs`, `ai_tool_calls`, `reminders`, `audit_logs`, `plans`, `subscriptions`, `usage_counters`.
@@ -73,8 +81,8 @@ Tools MVP: `get_business_info`, `get_services`, `get_service_details`, `get_prof
 
 1. ✅ **Base del proyecto** — monorepo, Next.js, FastAPI, Postgres, Docker, env config.
 2. ✅ **Auth** — users, businesses, memberships, roles.
-3. ✅ **Configuración del negocio** — servicios, profesionales, horarios, clientes. ← *estamos acá*
-4. Sistema de turnos — crear/cancelar/reprogramar, disponibilidad, anti double-booking.
+3. ✅ **Configuración del negocio** — servicios, profesionales, horarios, clientes.
+4. ✅ **Sistema de turnos** — crear/cancelar/reprogramar, disponibilidad, anti double-booking. ← *estamos acá*
 5. AI Agent — LLM abstraído, prompt dinámico, tool calling, memoria.
 6. WhatsApp — webhook, envío/recepción, identificación de cliente.
 7. Automatizaciones — recordatorios, confirmaciones.
