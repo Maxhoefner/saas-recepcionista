@@ -189,13 +189,24 @@ async def handle_message(
     conversation: Conversation,
     user_text: str,
     provider: LLMProvider,
+    whatsapp_message_id: str | None = None,
 ) -> tuple[Message, Message | None]:
     """Appends the customer's message and, unless a human already took over
     this conversation, runs the agent. Returns (customer_message, reply) —
     `reply` is None when the conversation is in HUMAN_HANDOFF/CLOSED, since
-    nothing should auto-reply in that case."""
+    nothing should auto-reply in that case.
+
+    `whatsapp_message_id`, when given, is stored on the same INSERT as the
+    message — its unique constraint is what actually closes the race if
+    Meta redelivers the same webhook event concurrently (raises
+    IntegrityError on the `await db.commit()` a few lines down; the caller
+    is expected to catch that and treat it as "already processed")."""
     user_message = await conversation_service.append_message(
-        db, conversation_id=conversation.id, role=MessageRole.USER, content=user_text
+        db,
+        conversation_id=conversation.id,
+        role=MessageRole.USER,
+        content=user_text,
+        whatsapp_message_id=whatsapp_message_id,
     )
     conversation_service.touch(conversation)
     await db.commit()

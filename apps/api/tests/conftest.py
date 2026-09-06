@@ -16,6 +16,8 @@ from app.ai.providers.base import AgentTurnResult, LLMProvider
 from app.core.db import Base, get_db
 from app.main import app
 from app.models import *  # noqa: F401,F403 (import every model so metadata sees them)
+from app.whatsapp.providers import get_whatsapp_provider
+from app.whatsapp.providers.base import WhatsAppProvider
 
 TEST_DATABASE_URL = os.environ["DATABASE_URL"]
 
@@ -129,3 +131,36 @@ def _override_llm_provider(fake_provider: FakeProvider) -> Iterator[None]:
         yield
     finally:
         app.dependency_overrides.pop(get_llm_provider, None)
+
+
+class FakeWhatsAppProvider(WhatsAppProvider):
+    """Records outgoing messages instead of calling Meta's API."""
+
+    def __init__(self) -> None:
+        self.sent: list[dict] = []
+
+    async def send_text_message(
+        self, *, phone_number_id: str, access_token: str, to: str, text: str
+    ) -> None:
+        self.sent.append(
+            {
+                "phone_number_id": phone_number_id,
+                "access_token": access_token,
+                "to": to,
+                "text": text,
+            }
+        )
+
+
+@pytest.fixture
+def fake_whatsapp_provider() -> FakeWhatsAppProvider:
+    return FakeWhatsAppProvider()
+
+
+@pytest.fixture(autouse=True)
+def _override_whatsapp_provider(fake_whatsapp_provider: FakeWhatsAppProvider) -> Iterator[None]:
+    app.dependency_overrides[get_whatsapp_provider] = lambda: fake_whatsapp_provider
+    try:
+        yield
+    finally:
+        app.dependency_overrides.pop(get_whatsapp_provider, None)

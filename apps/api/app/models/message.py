@@ -33,3 +33,10 @@ class Message(UUIDPkMixin, TimestampMixin, Base):
     # requested by an ASSISTANT message, or the tool_call_id a TOOL message
     # answers. Never shown to the end customer — that's `content`'s job.
     extra: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    # WhatsApp's own message id, set only on inbound USER messages that came
+    # from the webhook. The unique constraint is the real idempotency
+    # guarantee against Meta redelivering the same event — an app-level
+    # "have I seen this id" check alone can't close that race.
+    whatsapp_message_id: Mapped[str | None] = mapped_column(
+        String(128), unique=True, index=True, nullable=True
+    )

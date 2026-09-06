@@ -82,8 +82,15 @@ async def append_message(
     role: MessageRole,
     content: str | None,
     extra: dict[str, Any] | None = None,
+    whatsapp_message_id: str | None = None,
 ) -> Message:
-    message = Message(conversation_id=conversation_id, role=role, content=content, extra=extra)
+    message = Message(
+        conversation_id=conversation_id,
+        role=role,
+        content=content,
+        extra=extra,
+        whatsapp_message_id=whatsapp_message_id,
+    )
     db.add(message)
     await db.flush()
     return message

@@ -78,13 +78,19 @@ mypy app
 - `GET/PUT /api/v1/businesses/{id}/ai-settings` — personalidad del asistente (nombre, tono, idioma)
 - `GET/POST/PATCH/DELETE /api/v1/businesses/{id}/faqs`
 - `GET/POST /api/v1/businesses/{id}/conversations`, `GET .../{id}/messages`, `POST .../{id}/messages` (dispara al agente), `POST .../{id}/{handoff,return-to-ai}`
+- `GET/PUT /api/v1/businesses/{id}/whatsapp-account` — conectar el número de WhatsApp del negocio
+- `GET/POST /api/v1/webhooks/whatsapp` — webhook público (verificación de Meta / recepción de mensajes), no requiere login
 
 El login del dashboard (UI) se construye en la Fase 8; por ahora la auth es solo backend.
 
 ### Para probar el agente de IA con un LLM real
 
-Necesitás tu propia API key de Anthropic (console.anthropic.com) en `ANTHROPIC_API_KEY` dentro de `.env`, y reiniciar `docker compose up -d api`. Sin key configurada, todo lo demás (catálogo, turnos, CRUD de conversaciones) funciona igual — solo `POST .../messages` fallará al intentar generar una respuesta.
+Necesitás tu propia API key de Anthropic (console.anthropic.com) en `ANTHROPIC_API_KEY` dentro de `.env`, y reiniciar `docker compose up -d api`. Sin key configurada, todo lo demás (catálogo, turnos, CRUD de conversaciones) funciona igual — solo `POST .../messages` fallará al intentar generar una respuesta (con un mensaje de fallback prolijo, no un error feo).
+
+### Para probar WhatsApp de verdad
+
+Necesitás una WhatsApp Business App en [developers.facebook.com](https://developers.facebook.com), su App Secret (`WHATSAPP_APP_SECRET` en `.env`), un `WHATSAPP_VERIFY_TOKEN` (lo elegís vos) para registrar el webhook, y exponer tu `localhost:8000` con algo como `ngrok` para que Meta pueda llamarlo durante desarrollo. Una vez con la App, conectás el número de prueba gratuito de Meta vía `PUT /businesses/{id}/whatsapp-account`. Sin esto, el resto de la Fase 6 (webhook, idempotencia, resolución de negocio/cliente) ya está construido y testeado — solo falta un número real conectado para probarlo con mensajes de verdad.
 
 ## Estado del proyecto
 
-Ver el roadmap de fases en [`docs/architecture.md`](docs/architecture.md#roadmap). Actualmente: **Fase 5 (AI Agent) completa**.
+Ver el roadmap de fases en [`docs/architecture.md`](docs/architecture.md#roadmap). Actualmente: **Fase 6 (WhatsApp) completa**.

@@ -30,6 +30,16 @@ class Settings(BaseSettings):
     ANTHROPIC_MODEL: str = "claude-sonnet-5"
     AGENT_MAX_TOOL_ITERATIONS: int = 5
 
+    # Dev-only default (like JWT_SECRET) — generate a real one for anything
+    # beyond local dev: python -c "from cryptography.fernet import Fernet;
+    # print(Fernet.generate_key().decode())"
+    ENCRYPTION_KEY: str = "z3GfZNdioQ-bEiX0Mcej_MWYG4BQQTmkojRp2M3BWXI="
+
+    WHATSAPP_PROVIDER: str = "meta"
+    WHATSAPP_VERIFY_TOKEN: str = ""
+    WHATSAPP_APP_SECRET: str = ""
+    WHATSAPP_API_BASE_URL: str = "https://graph.facebook.com/v21.0"
+
 
 @lru_cache
 def get_settings() -> Settings:

@@ -17,8 +17,8 @@ Monolito modular (no microservicios) para el MVP. Separación en módulos (`ai/`
 ## Componentes
 
 - **`apps/web`** — Next.js. Solo consume la API, sin lógica de negocio.
-- **`apps/api`** — FastAPI. Expone la API REST y el webhook de WhatsApp. El webhook nunca procesa el mensaje inline: valida, deduplica y encola.
-- **Worker (Arq)** — procesa mensajes entrantes (agente IA + tool calls + envío) y jobs periódicos (recordatorios). Se añade en Fase 6/7.
+- **`apps/api`** — FastAPI. Expone la API REST y el webhook de WhatsApp. El webhook procesa el mensaje en el mismo request (ver sección "WhatsApp (Fase 6)" — decisión revisada respecto al plan original, la idempotencia real lo hace seguro).
+- **Worker (Arq)** — jobs periódicos (recordatorios, confirmaciones). Se añade en la Fase 7, que es donde un scheduler es imprescindible.
 - **PostgreSQL** — fuente de verdad única.
 - **Redis** — cola de jobs, rate limiting, deduplicación de eventos de webhook, locks por conversación.
 
@@ -58,15 +58,28 @@ Todo bajo `/businesses/{business_id}/...`, protegido por `require_business_role`
 
 `users`, `businesses`, `memberships(user_id, business_id, role)`, `customers`, `professionals`, `services`, `professional_services`, `business_hours`, `professional_hours`, `blocked_times`, `holidays`, `appointments` (con `EXCLUDE USING gist` para prevenir double-booking a nivel de DB — pendiente, Fase 4), `whatsapp_accounts`, `conversations`, `messages` (con `whatsapp_message_id` único para idempotencia), `ai_settings`, `faqs`, `ai_tool_calls`, `reminders`, `audit_logs`, `plans`, `subscriptions`, `usage_counters`.
 
-## Flujo de un mensaje de WhatsApp
+## WhatsApp (Fase 6)
+
+**Decisión revisada**: el plan original (Fase 1) decía "el webhook nunca procesa inline, siempre encola vía Arq". Al implementarlo, simplifiqué: el webhook procesa el mensaje directamente en el mismo request. Es seguro porque la idempotencia es real (constraint único en `messages.whatsapp_message_id`, no solo un chequeo de aplicación) — un timeout que haga que Meta reintente el mismo evento nunca lo procesa dos veces. La cola con Arq se implementa en la Fase 7, que es donde hace falta de verdad (recordatorios programados no funcionan sin un scheduler). Evita infraestructura nueva sin necesidad concreta todavía.
+
+Flujo real:
 
 ```
-Meta → Webhook (valida firma + idempotencia) → encola → 200 OK
-Worker: resuelve business_id por phone_number_id → busca/crea customer y conversation
-      → si HUMAN_HANDOFF: guarda y notifica dashboard, no llama al agente
-      → si no: arma prompt dinámico → agente IA (tool calls contra servicios) → respuesta
-      → guarda mensaje + logs de tool calls → envía por WhatsApp
+Meta → POST /webhooks/whatsapp → valida firma (X-Hub-Signature-256, HMAC-SHA256)
+     → resuelve business_id por phone_number_id (WhatsAppAccount)
+     → dedup por whatsapp_message_id (fast-path) → get_or_create customer (por wa_id) y conversation
+     → agent.handle_message (la MISMA función que usa el endpoint de prueba de la Fase 5,
+       no hay lógica duplicada) → si hay reply, se envía por WhatsAppProvider
+     → siempre responde 200 a Meta, incluso si algo falló internamente (se loguea;
+       un webhook con demasiadas respuestas no-200 seguidas Meta lo deshabilita solo)
 ```
+
+- **`WhatsAppProvider`** (`app/whatsapp/providers/`): misma idea que `LLMProvider` — interfaz propia, `MetaCloudAPIProvider` es la única implementación. Cada call lleva `phone_number_id`/`access_token` como parámetros (son por negocio, no config de proceso).
+- **Un `WhatsAppAccount` por negocio**: `phone_number_id` único global, `access_token` **encriptado at rest** con Fernet (`app/core/security.encrypt_secret`) — nunca se devuelve por API una vez guardado (`WhatsAppAccountRead` no tiene ese campo).
+- **Idempotencia real**: `whatsapp_message_id` es una columna única en `messages`. El INSERT del mensaje entrante la lleva puesta desde el principio — si dos entregas del mismo evento llegan concurrentemente, la segunda choca contra el constraint de la DB (`IntegrityError`, atrapado y tratado como "ya procesado"), igual que el anti-double-booking de la Fase 4. El chequeo previo por `SELECT` es solo un fast-path para no correr todo el loop del agente en el caso común.
+- **Tipos de mensaje no soportados** (audio, imagen, ubicación, etc.) se ignoran silenciosamente por ahora (logueado) — no rompen el webhook. Quedan para una iteración futura si el negocio lo necesita.
+- **Verificación de firma**: usa `WHATSAPP_APP_SECRET` sobre el body crudo (`await request.body()`), nunca sobre el JSON re-serializado — el hash cambiaría.
+- **Probado con Docker real, no solo mocks**: la conexión de cuenta usó credenciales falsas a propósito, así que Meta devolvió 401 real al intentar enviar — sirvió para confirmar que el manejo de errores no rompe el webhook (respondió 200 igual, todo quedó logueado).
 
 ## AI Agent (Fase 5)
 
@@ -88,9 +101,9 @@ Tools implementadas: `get_business_info`, `get_services`, `get_service_details`,
 2. ✅ **Auth** — users, businesses, memberships, roles.
 3. ✅ **Configuración del negocio** — servicios, profesionales, horarios, clientes.
 4. ✅ **Sistema de turnos** — crear/cancelar/reprogramar, disponibilidad, anti double-booking.
-5. ✅ **AI Agent** — LLM abstraído, prompt dinámico, tool calling, memoria. ← *estamos acá*
-6. WhatsApp — webhook, envío/recepción, identificación de cliente.
-7. Automatizaciones — recordatorios, confirmaciones.
+5. ✅ **AI Agent** — LLM abstraído, prompt dinámico, tool calling, memoria.
+6. ✅ **WhatsApp** — webhook, envío/recepción, identificación de cliente. ← *estamos acá*
+7. Automatizaciones — recordatorios, confirmaciones (acá se introduce Arq/Redis para jobs).
 8. Dashboard — calendario, conversaciones, clientes, estadísticas.
 9. Seguridad + testing end-to-end.
 10. Deployment a producción.

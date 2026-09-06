@@ -6,11 +6,13 @@ from typing import Any, Literal
 import jwt
 from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError
+from cryptography.fernet import Fernet
 
 from app.core.config import get_settings
 
 settings = get_settings()
 _hasher = PasswordHasher()
+_fernet = Fernet(settings.ENCRYPTION_KEY)
 
 TokenType = Literal["access", "refresh"]
 
@@ -64,3 +66,13 @@ def decode_token(token: str, *, expected_type: TokenType) -> dict[str, Any]:
     if payload.get("type") != expected_type:
         raise jwt.InvalidTokenError(f"Expected a {expected_type} token")
     return payload
+
+
+def encrypt_secret(value: str) -> str:
+    """Encrypts a third-party credential (e.g. a WhatsApp access token) before
+    it's stored — these aren't ours to leave in plaintext in the database."""
+    return _fernet.encrypt(value.encode("utf-8")).decode("utf-8")
+
+
+def decrypt_secret(token: str) -> str:
+    return _fernet.decrypt(token.encode("utf-8")).decode("utf-8")
