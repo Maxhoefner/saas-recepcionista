@@ -106,6 +106,20 @@ Acá entra la infraestructura de jobs que se había postergado en la Fase 6: **A
 - **Encontré y corregí un bug real en el camino, no relacionado con recordatorios pero que los recordatorios expusieron**: nada impedía crear un turno con fecha en el pasado. Agregado el chequeo en `availability_service.validate_slot_available` (afecta tanto `create_appointment` como `reschedule_appointment`).
 - 56 tests. El envío se prueba llamando directo a `reminder_service.send_reminder` (forzando `scheduled_for` al pasado) — no se testea el scheduler de Arq en sí, solo la lógica que corre adentro del job.
 
+## Dashboard (Fase 8)
+
+Next.js consumiendo toda la API construida en las Fases 2-7. Sin librería de componentes — Tailwind directo con unos pocos primitivos propios (`src/components/ui.tsx`: Button, Input, Card, Badge, etc.).
+
+- **Auth del lado del cliente** (`src/lib/auth-context.tsx`): tokens (access/refresh) en `localStorage`, no en cookies — es una decisión deliberada de simplicidad para este dashboard interno (no customer-facing), dado que el backend y el frontend son orígenes distintos (`localhost:3000` vs `localhost:8000`) y cookies httpOnly cross-origin hubieran requerido una capa BFF. Queda anotado como algo a revisar antes de un hardening de seguridad más serio. `apiFetch()` centraliza el refresh-on-401 (un solo reintento) para que cada página no tenga que lidiar con tokens vencidos.
+- **Sin `middleware.ts`**: esta versión de Next.js lo renombró a `proxy.ts` (deprecó `middleware`). No lo necesitamos igual — la protección de rutas es un guard del lado del cliente en el layout de `(dashboard)`, consistente con que la sesión vive en `localStorage`, no en una cookie que el servidor pueda leer.
+- **Estructura de rutas**: `(dashboard)` es un *route group* — no agrega segmento a la URL. El home vive en `/dashboard` (carpeta real `dashboard/` adentro del grupo); el resto de las secciones son rutas de primer nivel (`/services`, `/appointments`, etc.) que comparten el layout con sidebar del grupo.
+- **Secciones**: Dashboard (stats + turnos de hoy), Turnos (agenda por día, no un calendario tipo grilla — así de simple alcanza para el MVP), Clientes, Profesionales (con asignación de servicios), Servicios, Conversaciones (ver mensajes, tomar control / devolver a IA), Configuración (horarios, personalidad de la IA, WhatsApp, recordatorios, FAQs — todo en pestañas de una sola página).
+- **Tres bugs reales encontrados y corregidos durante la implementación** (no solo trabajo de UI):
+  1. Los links del sidebar apuntaban a `/dashboard/services` etc. — un error de no entender que el route group `(dashboard)` no se refleja en la URL. Corregido a rutas de primer nivel.
+  2. *Hydration mismatch* en `AuthProvider`: leía `localStorage` de forma síncrona en el `useState` inicial, que en el servidor siempre da `null` (no hay `window`) — React descartaba el árbol del servidor y volvía a renderizar en el cliente. Corregido: el estado inicial es igual en servidor y cliente (`isLoading = true`), y la lectura real de `localStorage` pasa a un `useEffect` que corre solo en el cliente.
+  3. **Infraestructura, no código de la app**: el volumen anónimo `/app/.next` en el servicio `web` de `docker-compose.yml` retenía la build de Next.js entre recreaciones del contenedor — cualquier cambio de código se perdía silenciosamente hasta borrar el volumen a mano. Sacado del compose; el directorio `.next` ahora vive dentro del bind mount como cualquier otro archivo del proyecto.
+- Probado de punta a punta en el navegador real (no solo build/lint): login, crear servicio → asignarlo a un profesional → crear cliente → reservar turno (incluyendo que el chequeo "no reservar en el pasado" de la Fase 7 lo rechazó correctamente al probarlo con un horario ya pasado) → confirmar turno → logout → confirmar que una ruta protegida redirige sin sesión.
+
 ## Roadmap
 
 1. ✅ **Base del proyecto** — monorepo, Next.js, FastAPI, Postgres, Docker, env config.
@@ -114,8 +128,8 @@ Acá entra la infraestructura de jobs que se había postergado en la Fase 6: **A
 4. ✅ **Sistema de turnos** — crear/cancelar/reprogramar, disponibilidad, anti double-booking.
 5. ✅ **AI Agent** — LLM abstraído, prompt dinámico, tool calling, memoria.
 6. ✅ **WhatsApp** — webhook, envío/recepción, identificación de cliente.
-7. ✅ **Automatizaciones** — recordatorios (Arq/Redis para jobs). ← *estamos acá*
-8. Dashboard — calendario, conversaciones, clientes, estadísticas.
+7. ✅ **Automatizaciones** — recordatorios (Arq/Redis para jobs).
+8. ✅ **Dashboard** — turnos, conversaciones, clientes, configuración. ← *estamos acá*
 9. Seguridad + testing end-to-end.
 10. Deployment a producción.
 

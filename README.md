@@ -83,7 +83,9 @@ mypy app
 - `GET/PUT /api/v1/businesses/{id}/reminder-settings` — activado, horas antes del turno, texto del mensaje
 - `GET /api/v1/businesses/{id}/reminders` — estado de los recordatorios (PENDING/SENT/FAILED/CANCELLED)
 
-El login del dashboard (UI) se construye en la Fase 8; por ahora la auth es solo backend.
+## Dashboard
+
+En `http://localhost:3000` una vez levantado todo con `docker compose up`. Registrá un negocio nuevo en `/register`, o usá una de las cuentas sembradas (`ana@peluqueriabella-demo.com` / `test1234`). Sesión basada en JWT guardado en `localStorage` (no cookies — el frontend y el backend son orígenes distintos en desarrollo).
 
 ### Para probar el agente de IA con un LLM real
 
@@ -99,4 +101,4 @@ Corren solos: al crear/reprogramar un turno se programa un recordatorio (24hs an
 
 ## Estado del proyecto
 
-Ver el roadmap de fases en [`docs/architecture.md`](docs/architecture.md#roadmap). Actualmente: **Fase 7 (automatizaciones) completa**.
+Ver el roadmap de fases en [`docs/architecture.md`](docs/architecture.md#roadmap). Actualmente: **Fase 8 (dashboard) completa**.
