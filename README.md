@@ -82,6 +82,9 @@ mypy app
 - `GET/POST /api/v1/webhooks/whatsapp` — webhook público (verificación de Meta / recepción de mensajes), no requiere login
 - `GET/PUT /api/v1/businesses/{id}/reminder-settings` — activado, horas antes del turno, texto del mensaje
 - `GET /api/v1/businesses/{id}/reminders` — estado de los recordatorios (PENDING/SENT/FAILED/CANCELLED)
+- `GET /api/v1/businesses/{id}/audit-logs` — quién hizo qué (solo acciones sensibles/destructivas), `OWNER`/`ADMIN`
+
+`/auth/register`, `/auth/login`, `/auth/refresh` y el webhook de WhatsApp tienen rate limiting (Redis-backed, vale entre réplicas).
 
 ## Dashboard
 
@@ -101,4 +104,4 @@ Corren solos: al crear/reprogramar un turno se programa un recordatorio (24hs an
 
 ## Estado del proyecto
 
-Ver el roadmap de fases en [`docs/architecture.md`](docs/architecture.md#roadmap). Actualmente: **Fase 8 (dashboard) completa**.
+Ver el roadmap de fases en [`docs/architecture.md`](docs/architecture.md#roadmap). Actualmente: **Fase 9 (seguridad + testing end-to-end) completa**.

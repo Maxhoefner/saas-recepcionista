@@ -7,6 +7,7 @@ from app.ai.providers import get_llm_provider
 from app.ai.providers.base import LLMProvider
 from app.core.config import get_settings
 from app.core.db import get_db
+from app.core.rate_limit import limiter
 from app.schemas.whatsapp_webhook import WhatsAppWebhookPayload
 from app.services import whatsapp_service
 from app.whatsapp.providers import get_whatsapp_provider
@@ -33,6 +34,7 @@ async def verify_webhook(request: Request) -> Response:
 
 
 @router.post("", status_code=status.HTTP_200_OK)
+@limiter.limit("300/minute")
 async def receive_webhook(
     request: Request,
     db: AsyncSession = Depends(get_db),

@@ -120,6 +120,18 @@ Next.js consumiendo toda la API construida en las Fases 2-7. Sin librería de co
   3. **Infraestructura, no código de la app**: el volumen anónimo `/app/.next` en el servicio `web` de `docker-compose.yml` retenía la build de Next.js entre recreaciones del contenedor — cualquier cambio de código se perdía silenciosamente hasta borrar el volumen a mano. Sacado del compose; el directorio `.next` ahora vive dentro del bind mount como cualquier otro archivo del proyecto.
 - Probado de punta a punta en el navegador real (no solo build/lint): login, crear servicio → asignarlo a un profesional → crear cliente → reservar turno (incluyendo que el chequeo "no reservar en el pasado" de la Fase 7 lo rechazó correctamente al probarlo con un horario ya pasado) → confirmar turno → logout → confirmar que una ruta protegida redirige sin sesión.
 
+## Seguridad + testing end-to-end (Fase 9)
+
+- **Rate limiting** (`slowapi` + Redis, `app/core/rate_limit.py`): un único `Limiter` compartido, backed by Redis (no en memoria del proceso) para que el límite valga entre réplicas/workers, no solo dentro de uno. Aplicado donde importa de verdad: `/auth/register` (5/hora), `/auth/login` (10/minuto), `/auth/refresh` (30/minuto) y el webhook de WhatsApp (300/minuto, como piso defensivo — Meta puede reintentar en ráfaga).
+  - Los tests de la suite corren con el limiter **apagado por defecto** (`conftest.py`): el `ASGITransport` de httpx le da la misma IP falsa a cada request, así que sin esto cualquier test que llame `/auth/login` u otro endpoint limitado más de un puñado de veces en la suite completa empezaría a fallar por `429` — no es un bug de rate limiting real, es un artefacto del transporte de test. `test_rate_limiting.py` lo reactiva puntualmente para probar que funciona, y lo vuelve a apagar al terminar.
+  - Verificado también contra Docker real (no solo la suite): 11 logins seguidos devolvieron `401 ×10` + `429`, confirmando que el límite corta antes de tocar la lógica de auth.
+- **Audit log** (`AuditLog`, `audit_service.py`, `GET /businesses/{id}/audit-logs`): registra quién hizo qué, cuándo — pero **solo acciones sensibles o destructivas**, no todo el CRUD (decisión deliberada: un log de auditoría que registra creates rutinarios deja de ser útil como rastro de auditoría). Cubre: conectar WhatsApp, cambiar configuración de IA/recordatorios/horarios de negocio, borrar servicio/profesional, cancelar turno, handoff/retorno a IA. `user_id` es nullable (`SET NULL` si el usuario se borra) — pensado para el día en que el agente de IA también audite sus propias acciones sensibles, aunque hoy todas las entradas vienen de un humano autenticado.
+  - El registro se hace con `db.add(...)` sin commit propio — se confirma en la misma transacción que el cambio que audita, para que no pueda quedar una auditoría de algo que en realidad no se guardó (o viceversa).
+  - El `access_token` de WhatsApp nunca se audita, solo el `phone_number_id` — probado explícitamente (`test_connecting_whatsapp_creates_an_audit_entry` verifica que el token no aparece en la respuesta del log).
+  - Lectura restringida a `OWNER`/`ADMIN` (igual criterio que el resto de configuración sensible del negocio); `STAFF` recibe 403.
+- **Revisión de seguridad formal** sobre todo el diff de la fase (manual, siguiendo la metodología del skill `security-review`: categorías de OWASP + filtrado de falsos positivos): sin hallazgos de severidad alta o media. Puntos verificados explícitamente: que agregar el audit log no aflojó ningún `require_business_role` existente en los endpoints tocados, que el token de WhatsApp nunca llega al audit trail, y que ningún schema auditado (`AISettingsUpdate`, `ReminderSettingsUpdate`) tiene campos sensibles.
+- 62 tests en total (suma 6 nuevos: rate limiting + audit log).
+
 ## Roadmap
 
 1. ✅ **Base del proyecto** — monorepo, Next.js, FastAPI, Postgres, Docker, env config.
@@ -129,8 +141,8 @@ Next.js consumiendo toda la API construida en las Fases 2-7. Sin librería de co
 5. ✅ **AI Agent** — LLM abstraído, prompt dinámico, tool calling, memoria.
 6. ✅ **WhatsApp** — webhook, envío/recepción, identificación de cliente.
 7. ✅ **Automatizaciones** — recordatorios (Arq/Redis para jobs).
-8. ✅ **Dashboard** — turnos, conversaciones, clientes, configuración. ← *estamos acá*
-9. Seguridad + testing end-to-end.
+8. ✅ **Dashboard** — turnos, conversaciones, clientes, configuración.
+9. ✅ **Seguridad + testing end-to-end** — rate limiting, audit log, revisión de seguridad. ← *estamos acá*
 10. Deployment a producción.
 
 ## Riesgos técnicos principales

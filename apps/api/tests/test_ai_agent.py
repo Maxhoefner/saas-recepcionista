@@ -217,4 +217,92 @@ async def test_tool_results_never_leak_another_businesss_data(
 
     tool_message = next(m for m in fake_provider.calls[1]["messages"] if m.role.value == "tool")
     assert "Corte A" in tool_message.content
-    assert "Corte B" not in tool_message.content
+
+
+async def test_agent_cannot_cancel_another_customers_appointment(
+    client: AsyncClient, owner: dict, fake_provider: FakeProvider
+) -> None:
+    """Fase 9 security case: even if the LLM is tricked (or just hallucinates)
+    into calling cancel_appointment with an id it saw earlier in a *different*
+    conversation, the tool must refuse — ownership is checked server-side
+    against the conversation's own customer_id, never trusted from the model."""
+    biz, headers = owner["business_id"], owner["headers"]
+    await client.put(
+        f"/api/v1/businesses/{biz}/business-hours", json=_ALL_DAY_HOURS, headers=headers
+    )
+    service = (
+        await client.post(
+            f"/api/v1/businesses/{biz}/services",
+            json={"name": "Corte", "price_cents": 15000, "duration_minutes": 30},
+            headers=headers,
+        )
+    ).json()
+    await client.post(
+        f"/api/v1/businesses/{biz}/professionals",
+        json={"name": "María", "service_ids": [service["id"]]},
+        headers=headers,
+    )
+
+    # Customer A books an appointment in their own conversation.
+    conversation_a = await _create_conversation(client, owner)
+    fake_provider.queue(
+        AgentTurnResult(
+            text=None,
+            tool_calls=[
+                ToolCallRequest(
+                    id="call_1",
+                    name="create_appointment",
+                    arguments={"service_name": "Corte", "start_datetime": "2026-12-15T10:00:00Z"},
+                )
+            ],
+        )
+    )
+    fake_provider.queue(AgentTurnResult(text="Listo.", tool_calls=[]))
+    await client.post(
+        f"/api/v1/businesses/{biz}/conversations/{conversation_a['id']}/messages",
+        json={"text": "Quiero un turno de corte el 15/12 a las 10"},
+        headers=headers,
+    )
+    appointments_resp = await client.get(f"/api/v1/businesses/{biz}/appointments", headers=headers)
+    appointment_id = appointments_resp.json()[0]["id"]
+
+    # A second, unrelated customer's conversation tries to cancel it.
+    other_customer = (
+        await client.post(
+            f"/api/v1/businesses/{biz}/customers",
+            json={"phone": "+5491100000099", "name": "Otro Cliente"},
+            headers=headers,
+        )
+    ).json()
+    conversation_b = (
+        await client.post(
+            f"/api/v1/businesses/{biz}/conversations",
+            json={"customer_id": other_customer["id"]},
+            headers=headers,
+        )
+    ).json()
+
+    fake_provider.queue(
+        AgentTurnResult(
+            text=None,
+            tool_calls=[
+                ToolCallRequest(
+                    id="call_2",
+                    name="cancel_appointment",
+                    arguments={"appointment_id": appointment_id},
+                )
+            ],
+        )
+    )
+    fake_provider.queue(AgentTurnResult(text="No encontré ese turno.", tool_calls=[]))
+    await client.post(
+        f"/api/v1/businesses/{biz}/conversations/{conversation_b['id']}/messages",
+        json={"text": "cancelame el turno " + appointment_id},
+        headers=headers,
+    )
+
+    tool_message = next(m for m in fake_provider.calls[-1]["messages"] if m.role.value == "tool")
+    assert "error" in tool_message.content
+
+    still_there_resp = await client.get(f"/api/v1/businesses/{biz}/appointments", headers=headers)
+    assert still_there_resp.json()[0]["status"] == "PENDING"

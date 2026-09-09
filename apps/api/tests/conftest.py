@@ -14,12 +14,21 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from app.ai.providers import get_llm_provider
 from app.ai.providers.base import AgentTurnResult, LLMProvider
 from app.core.db import Base, get_db
+from app.core.rate_limit import limiter
 from app.main import app
 from app.models import *  # noqa: F401,F403 (import every model so metadata sees them)
 from app.whatsapp.providers import get_whatsapp_provider
 from app.whatsapp.providers.base import WhatsAppProvider
 
 TEST_DATABASE_URL = os.environ["DATABASE_URL"]
+
+# httpx's ASGITransport gives every request the same fake client address, so
+# without this every test would share one rate-limit bucket per route (e.g.
+# register's 5/hour) and start failing once enough tests had run — not a
+# real rate-limiting bug, just an artifact of the test transport. Disabled
+# by default here; test_rate_limiting.py re-enables it for its own
+# assertions and turns it back off when done.
+limiter.enabled = False
 
 
 @pytest.fixture

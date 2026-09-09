@@ -1,8 +1,9 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user
 from app.core.db import get_db
+from app.core.rate_limit import limiter
 from app.models.user import User
 from app.schemas.auth import (
     LoginRequest,
@@ -24,7 +25,10 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 
 @router.post("/register", response_model=RegisterResponse, status_code=status.HTTP_201_CREATED)
-async def register(data: RegisterRequest, db: AsyncSession = Depends(get_db)) -> RegisterResponse:
+@limiter.limit("5/hour")
+async def register(
+    request: Request, data: RegisterRequest, db: AsyncSession = Depends(get_db)
+) -> RegisterResponse:
     try:
         user = await auth_service.register(db, data)
     except EmailAlreadyExistsError as exc:
@@ -37,7 +41,10 @@ async def register(data: RegisterRequest, db: AsyncSession = Depends(get_db)) ->
 
 
 @router.post("/login", response_model=TokenResponse)
-async def login(data: LoginRequest, db: AsyncSession = Depends(get_db)) -> TokenResponse:
+@limiter.limit("10/minute")
+async def login(
+    request: Request, data: LoginRequest, db: AsyncSession = Depends(get_db)
+) -> TokenResponse:
     try:
         user = await auth_service.authenticate(db, data.email, data.password)
     except InvalidCredentialsError as exc:
@@ -48,7 +55,10 @@ async def login(data: LoginRequest, db: AsyncSession = Depends(get_db)) -> Token
 
 
 @router.post("/refresh", response_model=TokenResponse)
-async def refresh(data: RefreshRequest, db: AsyncSession = Depends(get_db)) -> TokenResponse:
+@limiter.limit("30/minute")
+async def refresh(
+    request: Request, data: RefreshRequest, db: AsyncSession = Depends(get_db)
+) -> TokenResponse:
     try:
         return await auth_service.refresh_tokens(db, data.refresh_token)
     except InvalidRefreshTokenError as exc:

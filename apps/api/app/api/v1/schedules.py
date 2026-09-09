@@ -3,10 +3,11 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import require_business_role
+from app.api.deps import get_current_user, require_business_role
 from app.core.db import get_db
 from app.models.membership import Role
 from app.models.schedule import BlockedTime, BusinessHours, Holiday
+from app.models.user import User
 from app.schemas.schedule import (
     BlockedTimeCreate,
     BlockedTimeRead,
@@ -15,7 +16,7 @@ from app.schemas.schedule import (
     WeeklyHoursEntry,
     WeeklyHoursRead,
 )
-from app.services import schedule_service
+from app.services import audit_service, schedule_service
 from app.services.exceptions import NotFoundError
 
 router = APIRouter(prefix="/businesses/{business_id}", tags=["schedules"])
@@ -44,10 +45,21 @@ async def replace_business_hours(
     business_id: uuid.UUID,
     entries: list[WeeklyHoursEntry],
     db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
 ) -> list[BusinessHours]:
-    return await schedule_service.replace_business_hours(
+    hours = await schedule_service.replace_business_hours(
         db, business_id=business_id, entries=entries
     )
+    await audit_service.record(
+        db,
+        business_id=business_id,
+        user_id=user.id,
+        action="business_hours.replace",
+        entity="business_hours",
+        details={"entries": len(entries)},
+    )
+    await db.commit()
+    return hours
 
 
 @router.get(

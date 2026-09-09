@@ -4,16 +4,17 @@ from datetime import date, datetime
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import require_business_role
+from app.api.deps import get_current_user, require_business_role
 from app.core.db import get_db
 from app.models.appointment import Appointment, AppointmentStatus
+from app.models.user import User
 from app.schemas.appointment import (
     AppointmentCreate,
     AppointmentRead,
     AppointmentReschedule,
     AvailabilitySlots,
 )
-from app.services import appointment_service, availability_service
+from app.services import appointment_service, audit_service, availability_service
 from app.services.appointment_service import DoubleBookingError, InvalidStatusTransitionError
 from app.services.availability_service import SlotUnavailableError
 from app.services.exceptions import NotFoundError
@@ -89,16 +90,29 @@ async def get_appointment(
     dependencies=[Depends(_access)],
 )
 async def cancel_appointment(
-    business_id: uuid.UUID, appointment_id: uuid.UUID, db: AsyncSession = Depends(get_db)
+    business_id: uuid.UUID,
+    appointment_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
 ) -> Appointment:
     try:
-        return await appointment_service.cancel_appointment(
+        appointment = await appointment_service.cancel_appointment(
             db, business_id=business_id, appointment_id=appointment_id
         )
     except NotFoundError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Turno no encontrado") from exc
     except InvalidStatusTransitionError as exc:
         raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
+    await audit_service.record(
+        db,
+        business_id=business_id,
+        user_id=user.id,
+        action="appointment.cancel",
+        entity="appointment",
+        entity_id=str(appointment_id),
+    )
+    await db.commit()
+    return appointment
 
 
 @router.post(

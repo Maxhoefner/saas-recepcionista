@@ -3,6 +3,7 @@ from fastapi import APIRouter
 from app.api.v1 import (
     ai_settings,
     appointments,
+    audit_logs,
     auth,
     businesses,
     conversations,
@@ -32,3 +33,4 @@ api_router.include_router(conversations.router)
 api_router.include_router(whatsapp_account.router)
 api_router.include_router(whatsapp_webhook.router)
 api_router.include_router(reminders.router)
+api_router.include_router(audit_logs.router)

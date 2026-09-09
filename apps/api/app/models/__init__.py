@@ -1,6 +1,7 @@
 from app.models.ai_settings import AISettings
 from app.models.ai_tool_call import AIToolCall
 from app.models.appointment import Appointment, AppointmentStatus
+from app.models.audit_log import AuditLog
 from app.models.business import Business
 from app.models.conversation import Conversation, ConversationStatus
 from app.models.customer import Customer
@@ -21,6 +22,7 @@ __all__ = [
     "AIToolCall",
     "Appointment",
     "AppointmentStatus",
+    "AuditLog",
     "Business",
     "BlockedTime",
     "BusinessHours",

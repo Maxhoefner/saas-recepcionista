@@ -4,13 +4,14 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import require_business_role
+from app.api.deps import get_current_user, require_business_role
 from app.core.db import get_db
 from app.models.membership import Role
 from app.models.schedule import ProfessionalHours
+from app.models.user import User
 from app.schemas.professional import ProfessionalCreate, ProfessionalRead, ProfessionalUpdate
 from app.schemas.schedule import WeeklyHoursEntry, WeeklyHoursRead
-from app.services import catalog_service
+from app.services import audit_service, catalog_service
 from app.services.exceptions import NotFoundError
 
 router = APIRouter(prefix="/businesses/{business_id}/professionals", tags=["professionals"])
@@ -84,7 +85,10 @@ async def update_professional(
     dependencies=[Depends(_write_access)],
 )
 async def delete_professional(
-    business_id: uuid.UUID, professional_id: uuid.UUID, db: AsyncSession = Depends(get_db)
+    business_id: uuid.UUID,
+    professional_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
 ) -> None:
     try:
         await catalog_service.delete_professional(
@@ -92,6 +96,15 @@ async def delete_professional(
         )
     except NotFoundError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Profesional no encontrado") from exc
+    await audit_service.record(
+        db,
+        business_id=business_id,
+        user_id=user.id,
+        action="professional.delete",
+        entity="professional",
+        entity_id=str(professional_id),
+    )
+    await db.commit()
 
 
 @router.get(
